@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import pyautogui
 import random
@@ -57,7 +58,19 @@ def is_spotify_running():
 
 
 def get_current_song():
-    """Obtiene la canción actual via D-Bus (MPRIS), más fiable que el título de ventana."""
+    """Obtiene la canción actual via playerctl o D-Bus (MPRIS)."""
+    # Método 1: playerctl (más simple y preciso)
+    try:
+        result = subprocess.run(
+            ['playerctl', '-p', 'spotify', 'metadata', '--format', '{{artist}} - {{title}}'],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+
+    # Método 2: D-Bus con parseo correcto via regex
     try:
         result = subprocess.run(
             ['dbus-send', '--print-reply', '--dest=org.mpris.MediaPlayer2.spotify',
@@ -71,10 +84,18 @@ def get_current_song():
         title, artist = '', ''
         lines = output.split('\n')
         for i, line in enumerate(lines):
-            if 'xesam:title' in line and i + 1 < len(lines):
-                title = lines[i + 1].strip().strip('"')
-            if 'xesam:artist' in line and i + 2 < len(lines):
-                artist = lines[i + 2].strip().strip('"')
+            if '"xesam:title"' in line:
+                for j in range(i + 1, min(i + 4, len(lines))):
+                    match = re.search(r'string\s+"(.+)"', lines[j])
+                    if match:
+                        title = match.group(1)
+                        break
+            if '"xesam:artist"' in line:
+                for j in range(i + 1, min(i + 5, len(lines))):
+                    match = re.search(r'string\s+"(.+)"', lines[j])
+                    if match:
+                        artist = match.group(1)
+                        break
         if title:
             return f"{artist} - {title}" if artist else title
     except Exception:
