@@ -173,6 +173,16 @@ def iniciar_spotify():
     return False
 
 
+def dbus_play():
+    """Envía comando Play a Spotify via D-Bus (no pausa si ya está reproduciendo)."""
+    subprocess.run(
+        ['dbus-send', '--print-reply', '--dest=org.mpris.MediaPlayer2.spotify',
+         '/org/mpris/MediaPlayer2',
+         'org.mpris.MediaPlayer2.Player.Play'],
+        capture_output=True
+    )
+
+
 def abrir_playlist(playlist_id):
     """Abre una playlist en Spotify via D-Bus usando su URI."""
     uri = f"spotify:playlist:{playlist_id}"
@@ -186,9 +196,12 @@ def abrir_playlist(playlist_id):
             capture_output=True
         )
         time.sleep(4)
-        enfocar_spotify()
-        pyautogui.press('space')
-        time.sleep(1)
+        # Verificar si ya está reproduciendo, si no, enviar Play via D-Bus
+        status = get_playback_status()
+        if status != 'Playing':
+            logging.info("Spotify no está reproduciendo, enviando Play...")
+            dbus_play()
+            time.sleep(2)
         return True
     except Exception as e:
         logging.error(f"Error abriendo playlist {playlist_id}: {e}")
