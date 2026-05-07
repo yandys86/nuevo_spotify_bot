@@ -116,6 +116,25 @@ def get_current_song():
     return None
 
 
+def get_playback_status():
+    """Devuelve el estado de Spotify: Playing, Paused o Stopped."""
+    try:
+        result = subprocess.run(
+            ['dbus-send', '--print-reply', '--dest=org.mpris.MediaPlayer2.spotify',
+             '/org/mpris/MediaPlayer2',
+             'org.freedesktop.DBus.Properties.Get',
+             'string:org.mpris.MediaPlayer2.Player',
+             'string:PlaybackStatus'],
+            capture_output=True, text=True
+        )
+        match = re.search(r'string\s+"(\w+)"', result.stdout)
+        if match:
+            return match.group(1)
+    except Exception:
+        pass
+    return None
+
+
 def dar_like(corazon_x, corazon_y):
     logging.info(f"Dando Like en coordenadas: ({corazon_x}, {corazon_y})")
     pyautogui.click(corazon_x, corazon_y)
@@ -204,8 +223,6 @@ def main():
     raw_ids = config.get('Play_Lists', 'spotify_playlist_ids', fallback='')
     playlists = [p.strip() for p in raw_ids.split(',') if p.strip()]
     shuffle_playlists = config.get('scheduled_time', 'shuffle', fallback='no').strip().lower() == 'yes'
-    # Tiempo en horas por playlist (0 = sin límite)
-    horas_por_playlist = int(config.get('scheduled_time', 'time', fallback='0'))
 
     if not playlists:
         logging.error("No hay playlists configuradas en global_config.ini")
@@ -225,7 +242,7 @@ def main():
     last_song = None
     songs_liked = 0
     playlist_index = 0
-    playlist_start_time = None
+    stopped_since = None  # Momento en que Spotify dejó de reproducir
 
     logging.info("=== Spotify Robot iniciado ===")
 
@@ -242,12 +259,12 @@ def main():
                     logging.info(f"Abriendo playlist [{playlist_index + 1}/{len(playlists)}]: {current_playlist}")
 
                     if abrir_playlist(current_playlist):
-                        playlist_start_time = time.time()
+                        stopped_since = None
                         state = PlayerState.PLAYING
 
                         if send_msg and telegram_token:
                             send_telegram(
-                                f"Robot iniciado\nPlaylist: {current_playlist}\n({playlist_index + 1}/{len(playlists)})",
+                                f"Robot iniciado\nPlaylist: {current_playlist}\n({(playlist_index % len(playlists)) + 1}/{len(playlists)})",
                                 chat_ids, telegram_token
                             )
                     else:
@@ -258,23 +275,6 @@ def main():
                     time.sleep(30)
 
             elif state == PlayerState.PLAYING:
-                # Verificar si es hora de cambiar de playlist
-                if horas_por_playlist > 0 and playlist_start_time:
-                    elapsed_hours = (time.time() - playlist_start_time) / 3600
-                    if elapsed_hours >= horas_por_playlist:
-                        playlist_index += 1
-                        current_playlist = playlists[playlist_index % len(playlists)]
-                        logging.info(f"Tiempo cumplido. Cambiando a playlist: {current_playlist}")
-
-                        if send_msg and telegram_token:
-                            send_telegram(
-                                f"Cambiando playlist\nNueva: {current_playlist}\n({(playlist_index % len(playlists)) + 1}/{len(playlists)})\nTotal likes: {songs_liked}",
-                                chat_ids, telegram_token
-                            )
-
-                        abrir_playlist(current_playlist)
-                        playlist_start_time = time.time()
-
                 wait = random.randint(30, 60)
                 logging.info(f"Esperando {wait}s...")
                 time.sleep(wait)
@@ -283,23 +283,50 @@ def main():
                 if not is_spotify_running():
                     logging.warning("Spotify se cerró inesperadamente, reiniciando...")
                     state = PlayerState.IDLE
+                    stopped_since = None
                     continue
 
-                # Detectar cambio de canción y dar like
-                current_song = get_current_song()
-                if current_song and current_song != last_song:
-                    logging.info(f"Nueva canción: {current_song}")
-                    dar_like(corazon_x, corazon_y)
-                    songs_liked += 1
-                    last_song = current_song
+                # Verificar estado de reproducción
+                status = get_playback_status()
+                logging.info(f"Estado de Spotify: {status}")
 
-                    if send_msg and telegram_token:
-                        send_telegram(
-                            f"Like dado a: {current_song}\nTotal likes: {songs_liked}",
-                            chat_ids, telegram_token
-                        )
-                elif not current_song:
-                    logging.warning("No se detectó canción activa en Spotify")
+                if status == 'Playing':
+                    stopped_since = None
+                    # Detectar cambio de canción y dar like
+                    current_song = get_current_song()
+                    if current_song and current_song != last_song:
+                        logging.info(f"Nueva canción: {current_song}")
+                        dar_like(corazon_x, corazon_y)
+                        songs_liked += 1
+                        last_song = current_song
+
+                        if send_msg and telegram_token:
+                            send_telegram(
+                                f"Like dado a: {current_song}\nTotal likes: {songs_liked}",
+                                chat_ids, telegram_token
+                            )
+                else:
+                    # Spotify parado o pausado
+                    if stopped_since is None:
+                        stopped_since = time.time()
+                        logging.warning(f"Spotify no está reproduciendo (estado: {status})")
+                    else:
+                        elapsed = time.time() - stopped_since
+                        logging.warning(f"Spotify detenido hace {int(elapsed)}s")
+                        # Si lleva más de 90 segundos detenido, la playlist terminó
+                        if elapsed > 90:
+                            playlist_index += 1
+                            next_playlist = playlists[playlist_index % len(playlists)]
+                            logging.info(f"Playlist terminada. Cambiando a: {next_playlist} ({(playlist_index % len(playlists)) + 1}/{len(playlists)})")
+
+                            if send_msg and telegram_token:
+                                send_telegram(
+                                    f"Playlist terminada\nCambiando a: {next_playlist}\n({(playlist_index % len(playlists)) + 1}/{len(playlists)})\nTotal likes: {songs_liked}",
+                                    chat_ids, telegram_token
+                                )
+
+                            abrir_playlist(next_playlist)
+                            stopped_since = None
 
         except KeyboardInterrupt:
             logging.info(f"Robot detenido manualmente. Total likes dados: {songs_liked}")
