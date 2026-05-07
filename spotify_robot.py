@@ -122,17 +122,32 @@ def dar_like(corazon_x, corazon_y):
     time.sleep(0.5)
 
 
+def enfocar_spotify():
+    """Da foco a la ventana de Spotify para que reciba los comandos de teclado."""
+    try:
+        subprocess.run(
+            'xdotool search --name "Spotify" | head -1 | xargs xdotool windowfocus --sync',
+            shell=True, capture_output=True
+        )
+        time.sleep(0.5)
+        return True
+    except Exception:
+        return False
+
+
 def iniciar_spotify():
     if is_spotify_running():
         logging.info("Spotify ya estaba corriendo, no se abre otra instancia")
+        enfocar_spotify()
         return True
 
     logging.info("Abriendo Spotify...")
     subprocess.Popen(['spotify'])
-    time.sleep(10)
+    time.sleep(12)
 
     if is_spotify_running():
         logging.info("Spotify iniciado correctamente")
+        enfocar_spotify()
         return True
 
     logging.error("No se pudo iniciar Spotify")
@@ -151,8 +166,9 @@ def abrir_playlist(playlist_id):
              f'string:{uri}'],
             capture_output=True
         )
-        time.sleep(4)  # Espera a que Spotify cargue la playlist
-        pyautogui.press('space')  # Inicia reproducción
+        time.sleep(4)
+        enfocar_spotify()
+        pyautogui.press('space')
         time.sleep(1)
         return True
     except Exception as e:
