@@ -4,7 +4,7 @@ REPO="https://github.com/yandys86/nuevo_spotify_bot.git"
 BOT_DIR="/home/localuser/nuevo_spotify_bot"
 
 # --- LISTA DE VMs A ACTIVAR ---
-VMS="118 119" 
+VMS="117 118" 
 
 echo "================================================"
 echo "   YiyoLMB - Despliegue Total v5.1"
