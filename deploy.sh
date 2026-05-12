@@ -101,18 +101,27 @@ pkill -f spotify_robot.py 2>/dev/null || true
 sleep 1
 
 # Iniciar bot en segundo plano
-nohup python3 spotify_robot.py > nohup.log 2>&1 &
-echo "[$IP] Bot iniciado con PID \$!"
+# --- BLOQUE ACTUALIZADO ---
+    
+    # 1. Asegurar que localuser sea dueño de su carpeta y logs
+    sudo chown -R localuser:localuser "$BOT_DIR"
+    
+    # 2. Configurar acceso a la pantalla (evita el error de Xauthority)
+    export DISPLAY=:0
+    export XAUTHORITY=/home/localuser/.Xauthority
+    touch $XAUTHORITY
+    sudo chown localuser:localuser $XAUTHORITY
+    
+    # 3. Dar permiso explícito para que el bot "vea" el escritorio
+    xhost +localhost > /dev/null 2>&1 || true
+
+    # 4. Iniciar bot entrando a la carpeta para que el log NO se cree en la raíz
+    echo "[$IP] Lanzando bot..."
+    cd "$BOT_DIR"
+    nohup sudo -u localuser DISPLAY=:0 XAUTHORITY=/home/localuser/.Xauthority ./venv/bin/python3 spotify_robot.py > nohup.log 2>&1 &
+    
+    echo "[$IP] Bot iniciado correctamente con PID \$!"
 EOF
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}[$IP] ✓ Desplegado correctamente${NC}"
-        ((SUCCESS++))
-    else
-        echo -e "${RED}[$IP] ✗ Error en el despliegue${NC}"
-        ((FAILED++))
-    fi
-
 done
 
 echo ""
