@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+spotify_robot.log
+autostart.log
+bot_stdout.log
+*.log

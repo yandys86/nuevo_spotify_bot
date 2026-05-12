@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Spotify Bot Autostart
+Comment=Launch Spotify and the nuevo_spotify_bot at LXQt session start
+Exec=/bin/bash /home/localuser/nuevo_spotify_bot/autostart_bot.sh
+Icon=spotify
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-LXQt-Need-Tray=false
+OnlyShowIn=LXQt;
