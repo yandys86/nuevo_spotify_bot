@@ -1,32 +1,60 @@
 #!/bin/bash
-# Configuración para YiyoLMB
+# Configuración para YiyoLMB v6.1 - Persistencia y Auto-Arranque de App
 REPO="https://github.com/yandys86/nuevo_spotify_bot.git"
 BOT_DIR="/home/localuser/nuevo_spotify_bot"
 
-# --- LISTA DE VMs A ACTIVAR ---
+# --- LISTA DE VMs ---
 VMS="117 118" 
 
-echo "================================================"
-echo "   YiyoLMB - Despliegue Total v5.1"
-echo "================================================"
-
 for VM_ID in $VMS; do
-    echo -e "\n[VM $VM_ID] 1. Actualizando código..."
-    qm guest exec $VM_ID -- /bin/bash -c "export HOME=/home/localuser; git config --global --add safe.directory $BOT_DIR; if [ -d $BOT_DIR ]; then cd $BOT_DIR && git pull; else git clone $REPO $BOT_DIR; fi"
+    echo -e "\n[VM $VM_ID] Configurando persistencia total..."
 
-    echo "[VM $VM_ID] 2. Asegurando Librerías..."
-    qm guest exec $VM_ID -- /bin/bash -c "cd $BOT_DIR; [ ! -d venv ] && python3 -m venv venv; ./venv/bin/python3 -m pip install --upgrade pip; ./venv/bin/python3 -m pip install pyautogui requests"
+    # 1. Limpieza de procesos viejos y actualización
+    qm guest exec $VM_ID -- /bin/bash -c "pkill -f spotify; pkill -f python; export HOME=/home/localuser; git config --global --add safe.directory $BOT_DIR; [ -d $BOT_DIR ] && cd $BOT_DIR && git pull || git clone $REPO $BOT_DIR"
 
-    echo "[VM $VM_ID] 3. Sincronizando Cuenta..."
+    # 2. Asegurar entorno y cuenta
     qm guest exec 111 -- cat $BOT_DIR/account.ini > /tmp/acc_temp.ini
     qm guest exec $VM_ID -- /bin/bash -c "cat > $BOT_DIR/account.ini" < /tmp/acc_temp.ini
 
-    echo "[VM $VM_ID] 4. Lanzando Bot..."
-    qm guest exec $VM_ID -- /bin/bash -c "chown -R localuser:localuser $BOT_DIR; touch /home/localuser/.Xauthority; chown localuser:localuser /home/localuser/.Xauthority; pkill -f spotify_robot.py; sudo -u localuser bash -c 'export HOME=/home/localuser; export DISPLAY=:0; export XAUTHORITY=/home/localuser/.Xauthority; xhost +localhost; cd $BOT_DIR; nohup ./venv/bin/python3 spotify_robot.py > nohup.log 2>&1 &'"
+    # 3. CREAR EL SCRIPT DE ARRANQUE (wrapper)
+    # Este pequeño script asegura que Spotify se abra antes que el bot
+    START_SCRIPT="#!/bin/bash
+export DISPLAY=:0
+export XAUTHORITY=/home/localuser/.Xauthority
+xhost +localhost
+# Abrir Spotify si no está abierto
+pgrep -x spotify > /dev/null || (spotify &)
+sleep 15
+# Lanzar el bot
+cd $BOT_DIR
+./venv/bin/python3 spotify_robot.py"
 
-    echo "[VM $VM_ID] 5. Programando Play (Fondo)..."
-    # Usamos nohup también para el comando de Play para que no se corte
-    qm guest exec $VM_ID -- /bin/bash -c "sudo -u localuser bash -c 'export DISPLAY=:0; export XAUTHORITY=/home/localuser/.Xauthority; cd $BOT_DIR; nohup ./venv/bin/python3 -c \"import pyautogui; import time; time.sleep(15); pyautogui.press(\\\"esc\\\"); time.sleep(2); pyautogui.click(600, 400); time.sleep(1); pyautogui.press(\\\"space\\\")\" > /dev/null 2>&1 &'"
+    echo "$START_SCRIPT" > /tmp/run_yiyo.sh
+    qm guest exec $VM_ID -- /bin/bash -c "cat > $BOT_DIR/run_yiyo.sh && chmod +x $BOT_DIR/run_yiyo.sh"
+
+    # 4. CREAR EL SERVICIO DEL SISTEMA
+    SERVICE_FILE="[Unit]
+Description=Spotify Bot YiyoLMB Service
+After=graphical.target
+
+[Service]
+Type=simple
+User=localuser
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/localuser/.Xauthority
+WorkingDirectory=$BOT_DIR
+ExecStart=$BOT_DIR/run_yiyo.sh
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=graphical.target"
+
+    echo "$SERVICE_FILE" > /tmp/yiyobot.service
+    qm guest exec $VM_ID -- /bin/bash -c "cat > /etc/systemd/system/yiyobot.service" < /tmp/yiyobot.service
     
-    echo "[VM $VM_ID] ¡Configuración enviada!"
+    # 5. Activar y arrancar
+    qm guest exec $VM_ID -- /bin/bash -c "systemctl daemon-reload; systemctl enable yiyobot.service; systemctl restart yiyobot.service"
+
+    echo "[VM $VM_ID] ¡Instalado! Spotify y el Bot iniciarán automáticamente."
 done
