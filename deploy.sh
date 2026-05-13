@@ -2,7 +2,7 @@
 # Configuración YiyoLMB v6.9 - BYPASS TOTAL MASK
 REPO="https://github.com/yandys86/nuevo_spotify_bot.git"
 BOT_DIR="/home/localuser/nuevo_spotify_bot"
-VMS="117 118" 
+VMS="118" 
 
 for VM_ID in $VMS; do
     echo -e "\n[VM $VM_ID] 1. Limpieza de nombres viejos..."
