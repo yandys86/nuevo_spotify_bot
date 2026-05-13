@@ -1,61 +1,49 @@
 #!/bin/bash
-# Configuración para YiyoLMB v6.5 - Auto-Arranque y Persistencia
+# Configuración YiyoLMB v6.8 - LIMPIEZA TOTAL Y PERSISTENCIA
 REPO="https://github.com/yandys86/nuevo_spotify_bot.git"
 BOT_DIR="/home/localuser/nuevo_spotify_bot"
-
-# --- LISTA DE VMs ---
 VMS="117 118" 
 
 for VM_ID in $VMS; do
-    echo -e "\n[VM $VM_ID] 1. Limpieza y Desbloqueo..."
-    # Quitamos bloqueos de servicios previos y matamos procesos colgados
-    qm guest exec $VM_ID -- /bin/bash -c "systemctl unmask yiyobot.service; systemctl stop yiyobot.service 2>/dev/null; pkill -f spotify; pkill -f python"
+    echo -e "\n[VM $VM_ID] 1. Borrando rastro de scripts viejos..."
+    # 1. Matar procesos, borrar crontab y eliminar archivos de arranque viejos conocidos
+    qm guest exec $VM_ID -- /bin/bash -c "pkill -f spotify; pkill -f python; crontab -r 2>/dev/null; rm -f /home/localuser/start_bot.sh; rm -f /home/localuser/auto_run.sh"
 
-    echo "[VM $VM_ID] 2. Actualizando Código..."
-    qm guest exec $VM_ID -- /bin/bash -c "export HOME=/home/localuser; git config --global --add safe.directory $BOT_DIR; [ -d $BOT_DIR ] && cd $BOT_DIR && git pull || git clone $REPO $BOT_DIR"
+    # 2. Desbloquear servicios de sistema
+    qm guest exec $VM_ID -- /bin/bash -c "systemctl stop yiyobot.service 2>/dev/null; systemctl disable yiyobot.service 2>/dev/null; rm -f /etc/systemd/system/yiyobot.service; systemctl unmask yiyobot.service"
     
-    # Sincronizar cuenta desde la 111
-    qm guest exec 111 -- cat $BOT_DIR/account.ini > /tmp/acc_temp.ini
-    qm guest exec $VM_ID -- /bin/bash -c "cat > $BOT_DIR/account.ini" < /tmp/acc_temp.ini
+    echo "[VM $VM_ID] 2. Instalando versión limpia de YiyoLMB..."
+    qm guest exec $VM_ID -- /bin/bash -c "export HOME=/home/localuser; git config --global --add safe.directory $BOT_DIR; cd $BOT_DIR && git reset --hard origin/main && git pull"
 
-    echo "[VM $VM_ID] 3. Configurando Script de Arranque..."
-    # Este script abre Spotify, espera y lanza el bot
+    # 3. Nuevo Lanzador (Solo lo que queremos ahora)
     START_SCRIPT="#!/bin/bash
 export DISPLAY=:0
 export XAUTHORITY=/home/localuser/.Xauthority
 xhost +localhost
-# Abrir Spotify si no está corriendo
 pgrep -x spotify > /dev/null || (spotify &)
-sleep 15
+sleep 20
 cd $BOT_DIR
 ./venv/bin/python3 spotify_robot.py"
 
     echo "$START_SCRIPT" > /tmp/run_yiyo.sh
     qm guest exec $VM_ID -- /bin/bash -c "cat > $BOT_DIR/run_yiyo.sh && chmod +x $BOT_DIR/run_yiyo.sh"
 
-    echo "[VM $VM_ID] 4. Instalando Servicio de Persistencia..."
+    # 4. Crear el servicio de persistencia nuevo
     SERVICE_FILE="[Unit]
-Description=Spotify Bot YiyoLMB
+Description=YiyoLMB Bot Oficial
 After=graphical.target
-
 [Service]
-Type=simple
 User=localuser
 Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/localuser/.Xauthority
 WorkingDirectory=$BOT_DIR
 ExecStart=$BOT_DIR/run_yiyo.sh
 Restart=always
-RestartSec=20
-
+RestartSec=30
 [Install]
 WantedBy=graphical.target"
 
     echo "$SERVICE_FILE" > /tmp/yiyobot.service
-    qm guest exec $VM_ID -- /bin/bash -c "cat > /etc/systemd/system/yiyobot.service" < /tmp/yiyobot.service
+    qm guest exec $VM_ID -- /bin/bash -c "cat > /etc/systemd/system/yiyobot.service; systemctl daemon-reload; systemctl enable yiyobot.service; systemctl restart yiyobot.service"
     
-    # Activar todo
-    qm guest exec $VM_ID -- /bin/bash -c "systemctl daemon-reload; systemctl enable yiyobot.service; systemctl restart yiyobot.service"
-
-    echo "[VM $VM_ID] ¡Listo! Autogestionado y persistente."
+    echo "[VM $VM_ID] ¡Limpieza completa y bot nuevo activo!"
 done
