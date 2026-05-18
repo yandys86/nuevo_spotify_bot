@@ -57,8 +57,8 @@ gexec 15 "pgrep -af spotify_monitor.py || echo OLD_BOT_DEAD_OK"
 echo -e "\n[VM $VM_ID] 2a. Actualizando repositorio..."
 gexec 60 "export HOME=/home/localuser; git config --global --add safe.directory $BOT_DIR; if [ -d $BOT_DIR/.git ]; then cd $BOT_DIR && git pull origin main 2>&1 | tail -5; else git clone $REPO $BOT_DIR 2>&1 | tail -5; fi; echo STEP2A_OK"
 
-echo -e "\n[VM $VM_ID] 2b. Instalando python3-venv si falta..."
-gexec 120 "if ! dpkg -l python3-venv 2>/dev/null | grep -q '^ii'; then echo 'Instalando python3-venv...'; apt-get install -y python3-venv 2>&1 | tail -3; else echo 'python3-venv ya instalado'; fi; echo STEP2B_OK"
+echo -e "\n[VM $VM_ID] 2b. Instalando python3-venv y gnome-screenshot si faltan..."
+gexec 180 "apt-get install -y python3-venv gnome-screenshot 2>&1 | tail -5; echo STEP2B_OK"
 
 echo -e "\n[VM $VM_ID] 2c. Creando venv si no existe..."
 gexec 120 "if [ ! -x $BOT_DIR/venv/bin/python3 ]; then echo 'Creando venv...'; rm -rf $BOT_DIR/venv; python3 -m venv $BOT_DIR/venv && echo VENV_CREATED_OK || echo VENV_CREATE_FAILED; else echo 'venv ya existe'; fi"
