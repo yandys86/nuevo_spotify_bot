@@ -30,7 +30,7 @@ fi
 
 # 1. Limpiar bot VIEJO (/home/localuser/spotify_robot) y servicios systemd anteriores
 echo -e "\n[VM $VM_ID] 1. Limpiando bot VIEJO y servicios anteriores..."
-qm guest exec $VM_ID -- /bin/bash -c "
+qm guest exec --timeout 120 $VM_ID -- /bin/bash -c "
 # Detener systemd anterior
 systemctl stop yiyolmb.service 2>/dev/null
 systemctl stop yiyobot.service 2>/dev/null
@@ -91,9 +91,9 @@ fi
 true
 "
 
-# 2. Actualizar el repositorio nuevo
-echo -e "\n[VM $VM_ID] 2. Actualizando repositorio nuevo..."
-qm guest exec $VM_ID -- /bin/bash -c "
+# 2. Actualizar el repositorio nuevo (puede tardar - creación de venv + pip install)
+echo -e "\n[VM $VM_ID] 2. Actualizando repositorio nuevo (esto puede tardar 1-2 minutos)..."
+qm guest exec --timeout 300 $VM_ID -- /bin/bash -c "
 export HOME=/home/localuser
 git config --global --add safe.directory $BOT_DIR
 if [ -d $BOT_DIR ]; then
@@ -101,11 +101,32 @@ if [ -d $BOT_DIR ]; then
 else
     git clone $REPO $BOT_DIR
 fi
-# Crear venv si no existe
-if [ ! -d $BOT_DIR/venv ]; then
-    python3 -m venv $BOT_DIR/venv
+
+# Asegurar que python3-venv está instalado (lo necesita 'python3 -m venv')
+if ! dpkg -l python3-venv 2>/dev/null | grep -q '^ii'; then
+    echo 'Instalando python3-venv...'
+    apt-get install -y python3-venv 2>&1 | tail -3
 fi
-$BOT_DIR/venv/bin/pip install -q requests pyautogui 2>/dev/null
+
+# Crear venv si no existe (o si está corrupto y le falta python)
+if [ ! -x $BOT_DIR/venv/bin/python3 ]; then
+    echo 'Creando venv en $BOT_DIR/venv...'
+    rm -rf $BOT_DIR/venv
+    python3 -m venv $BOT_DIR/venv && echo 'VENV_CREATED_OK' || echo 'VENV_CREATE_FAILED'
+fi
+
+# Instalar dependencias (sin tragarse errores)
+echo 'Instalando dependencias...'
+$BOT_DIR/venv/bin/pip install -q --upgrade pip 2>&1 | tail -3
+$BOT_DIR/venv/bin/pip install -q requests pyautogui 2>&1 | tail -5
+
+# Verificar que el python del venv responde
+if $BOT_DIR/venv/bin/python3 --version 2>/dev/null; then
+    echo 'VENV_PYTHON_OK'
+else
+    echo 'VENV_PYTHON_FAIL'
+fi
+
 chown -R localuser:localuser $BOT_DIR
 true
 "
@@ -125,7 +146,7 @@ qm guest exec $VM_ID -- /bin/bash -c "systemctl status yiyolmb.service --no-page
 # 6. Verificar que el proceso del bot está corriendo
 echo -e "\n[VM $VM_ID] 6. Verificando proceso del bot..."
 sleep 3
-qm guest exec $VM_ID -- /bin/bash -c "
+qm guest exec --timeout 60 $VM_ID -- /bin/bash -c "
 echo '--- Procesos del bot NUEVO ---'
 pgrep -af spotify_robot.py || echo 'NO HAY PROCESOS DEL BOT NUEVO'
 echo '--- Procesos del bot VIEJO (deberían ser 0) ---'
