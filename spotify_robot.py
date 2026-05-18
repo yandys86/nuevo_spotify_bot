@@ -140,21 +140,30 @@ HEART_IMAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images',
 
 def dar_like(corazon_x, corazon_y):
     """Da like buscando el icono del corazon vacio por reconocimiento de imagen.
-    Si no lo encuentra (porque ya tiene like, o porque la imagen no matchea),
-    cae al fallback de coordenadas fijas configuradas."""
+    Restringe la busqueda a la barra del player (parte inferior de la pantalla)
+    para evitar matches incorrectos. Cae al fallback de coordenadas si no encuentra."""
     enfocar_spotify()
     try:
-        # confidence requiere opencv-python; sin opencv hace pixel-perfect match
-        location = pyautogui.locateOnScreen(HEART_IMAGE, confidence=0.8, grayscale=True)
+        # Restringir a la barra del player (bottom 120px) para evitar falsos positivos
+        screen_w, screen_h = pyautogui.size()
+        player_bar = (0, max(0, screen_h - 120), screen_w, min(120, screen_h))
+
+        # confidence bajado a 0.6 porque la imagen del bot viejo no matchea
+        # perfecto en la version actual de Spotify (max confidence ~0.64)
+        location = pyautogui.locateOnScreen(
+            HEART_IMAGE, confidence=0.6, grayscale=True, region=player_bar
+        )
         if location is not None:
             center = pyautogui.center(location)
             logging.info(f"Like via imagen en ({center.x}, {center.y})")
             pyautogui.click(center.x, center.y)
             time.sleep(0.5)
             return
-        logging.info("Corazon vacio no encontrado en pantalla (cancion ya tiene like o icono cambio)")
+    except pyautogui.ImageNotFoundException:
+        logging.info("Corazon vacio no encontrado (cancion ya tiene like o necesita imagen mas precisa)")
+        return
     except Exception as e:
-        logging.warning(f"Error buscando corazon por imagen: {e}")
+        logging.warning(f"Error buscando corazon por imagen ({type(e).__name__}): {e}")
 
     # Fallback a coordenadas fijas si la imagen no se puede usar
     logging.info(f"Fallback: like via coordenadas ({corazon_x}, {corazon_y})")
