@@ -89,11 +89,10 @@ chmod +x /usr/local/bin/yiyolmb-prestart.sh && echo PRESTART_OK"
 # === FASE 4: CREAR/RECREAR SERVICIO SYSTEMD ===
 
 echo -e "\n[VM $VM_ID] 4a. Creando servicio systemd yiyolmb.service..."
-gexec 30 "cat > /etc/systemd/system/yiyolmb.service << 'SERVICE_EOF'
+gexec 30 "LOCALUSER_UID=\$(id -u localuser); cat > /etc/systemd/system/yiyolmb.service << SERVICE_EOF
 [Unit]
 Description=YiyoLMB Spotify Bot
 After=graphical.target
-# Sin Wants= ni WantedBy=multi-user.target para evitar dependencia circular
 
 [Service]
 Type=simple
@@ -101,14 +100,17 @@ User=localuser
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/localuser/.Xauthority
 Environment=HOME=/home/localuser
+Environment=XDG_RUNTIME_DIR=/run/user/\$LOCALUSER_UID
+# CLAVE: usar la D-Bus session del usuario GUI para que MPRIS (Spotify)
+# y el bot esten en la misma sesion. Sin esto, dbus-send/playerctl
+# desde el bot no llega a Spotify.
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$LOCALUSER_UID/bus
 WorkingDirectory=/home/localuser/nuevo_spotify_bot
 PermissionsStartOnly=true
 ExecStartPre=/usr/local/bin/yiyolmb-prestart.sh
 ExecStart=/home/localuser/nuevo_spotify_bot/venv/bin/python3 /home/localuser/nuevo_spotify_bot/spotify_robot.py
 Restart=on-failure
 RestartSec=15
-# Nunca rendirse con los reintentos (clave para que sobreviva al boot
-# cuando SDDM aun no esta listo)
 StartLimitIntervalSec=0
 
 [Install]
