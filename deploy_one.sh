@@ -56,19 +56,20 @@ pkill -f stats_human.py 2>/dev/null
 pkill -f init_launcher_main.py 2>/dev/null
 
 # Quitar autostart del bot viejo de LXQt: cualquier .desktop que mencione spotify_monitor
-# o la ruta del bot viejo
-sudo -u localuser bash -c '
-    for f in /home/localuser/.config/autostart/*.desktop; do
-        [ -f \"\$f\" ] || continue
-        if grep -qE \"spotify_monitor|spotify_robot/|init_launcher_main|spotify_humandroid\" \"\$f\"; then
-            echo \"Eliminando autostart viejo: \$f\"
-            rm -f \"\$f\"
-        fi
-    done
-' 2>/dev/null || true
+# o la ruta del bot viejo (corremos como root, podemos borrar archivos de localuser directo)
+for f in /home/localuser/.config/autostart/*.desktop; do
+    [ -f \"\$f\" ] || continue
+    if grep -qE \"spotify_monitor|spotify_robot/|init_launcher_main|spotify_humandroid\" \"\$f\"; then
+        echo \"Eliminando autostart viejo: \$f\"
+        rm -f \"\$f\"
+    fi
+done
 
-# Quitar de cron de localuser si existe
-sudo -u localuser bash -c 'crontab -l 2>/dev/null | grep -v \"spotify_robot\\|spotify_humandroid\\|init_launcher_main\\|spotify_monitor\" | crontab - 2>/dev/null' || true
+# Quitar de cron de localuser si existe (root puede editar el crontab de otros usuarios)
+if crontab -u localuser -l 2>/dev/null | grep -qE 'spotify_robot|spotify_humandroid|init_launcher_main|spotify_monitor'; then
+    crontab -u localuser -l 2>/dev/null | grep -vE 'spotify_robot|spotify_humandroid|init_launcher_main|spotify_monitor' | crontab -u localuser -
+    echo 'Crontab de localuser limpiado'
+fi
 
 # Detener bot NUEVO si ya estaba corriendo (para reinicio limpio)
 pkill -f spotify_robot.py 2>/dev/null
