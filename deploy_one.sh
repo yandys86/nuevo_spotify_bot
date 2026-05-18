@@ -92,8 +92,8 @@ echo -e "\n[VM $VM_ID] 4a. Creando servicio systemd yiyolmb.service..."
 gexec 30 "cat > /etc/systemd/system/yiyolmb.service << 'SERVICE_EOF'
 [Unit]
 Description=YiyoLMB Spotify Bot
-After=network.target graphical.target
-Wants=graphical.target
+After=graphical.target
+# Sin Wants= ni WantedBy=multi-user.target para evitar dependencia circular
 
 [Service]
 Type=simple
@@ -107,14 +107,17 @@ ExecStartPre=/usr/local/bin/yiyolmb-prestart.sh
 ExecStart=/home/localuser/nuevo_spotify_bot/venv/bin/python3 /home/localuser/nuevo_spotify_bot/spotify_robot.py
 Restart=on-failure
 RestartSec=15
+# Nunca rendirse con los reintentos (clave para que sobreviva al boot
+# cuando SDDM aun no esta listo)
+StartLimitIntervalSec=0
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
 SERVICE_EOF
 systemctl daemon-reload && echo SERVICE_CREATED_OK"
 
-echo -e "\n[VM $VM_ID] 4b. Habilitando e iniciando servicio..."
-gexec 30 "systemctl unmask yiyolmb.service 2>/dev/null; systemctl enable yiyolmb.service 2>&1 | tail -3; systemctl restart yiyolmb.service && echo START_OK || echo START_FAILED"
+echo -e "\n[VM $VM_ID] 4b. Habilitando (disable+enable para limpiar symlinks viejos) y iniciando servicio..."
+gexec 30 "systemctl unmask yiyolmb.service 2>/dev/null; systemctl disable yiyolmb.service 2>/dev/null; systemctl enable yiyolmb.service 2>&1 | tail -3; systemctl restart yiyolmb.service && echo START_OK || echo START_FAILED"
 
 # === FASE 5: VERIFICACIÓN ===
 
