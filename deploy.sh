@@ -2,7 +2,7 @@
 # Configuracion YiyoLMB v7.1 - SCRIPT CORREGIDO (printf sin heredoc)
 REPO="https://github.com/yandys86/nuevo_spotify_bot.git"
 BOT_DIR="/home/localuser/nuevo_spotify_bot"
-VMS="117 118"
+VMS="120"
 
 for VM_ID in $VMS; do
     echo -e "\n[VM $VM_ID] === Iniciando deploy ==="
