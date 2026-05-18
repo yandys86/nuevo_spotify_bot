@@ -6,7 +6,7 @@
 set -u
 
 # Lista de VM_IDs a actualizar (separados por espacio)
-VMS="120"
+VMS="121,122,123,124,125"
 
 # Verificar que deploy_one.sh existe y es ejecutable
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
