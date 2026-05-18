@@ -135,17 +135,39 @@ def get_playback_status():
     return None
 
 
+HEART_IMAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images', 'Click_Like.png')
+
+
 def dar_like(corazon_x, corazon_y):
-    logging.info(f"Dando Like en coordenadas: ({corazon_x}, {corazon_y})")
+    """Da like buscando el icono del corazon vacio por reconocimiento de imagen.
+    Si no lo encuentra (porque ya tiene like, o porque la imagen no matchea),
+    cae al fallback de coordenadas fijas configuradas."""
+    enfocar_spotify()
+    try:
+        # confidence requiere opencv-python; sin opencv hace pixel-perfect match
+        location = pyautogui.locateOnScreen(HEART_IMAGE, confidence=0.8, grayscale=True)
+        if location is not None:
+            center = pyautogui.center(location)
+            logging.info(f"Like via imagen en ({center.x}, {center.y})")
+            pyautogui.click(center.x, center.y)
+            time.sleep(0.5)
+            return
+        logging.info("Corazon vacio no encontrado en pantalla (cancion ya tiene like o icono cambio)")
+    except Exception as e:
+        logging.warning(f"Error buscando corazon por imagen: {e}")
+
+    # Fallback a coordenadas fijas si la imagen no se puede usar
+    logging.info(f"Fallback: like via coordenadas ({corazon_x}, {corazon_y})")
     pyautogui.click(corazon_x, corazon_y)
     time.sleep(0.5)
 
 
 def enfocar_spotify():
-    """Da foco a la ventana de Spotify para que reciba los comandos de teclado."""
+    """Da foco a la ventana de Spotify para que reciba los clicks/teclado.
+    Busca case-insensitive porque el nombre puede ser 'Spotify', 'spotify', 'Spotify Free', etc."""
     try:
         subprocess.run(
-            'xdotool search --name "Spotify" | head -1 | xargs xdotool windowfocus --sync',
+            'xdotool search --class spotify | head -1 | xargs -r xdotool windowactivate',
             shell=True, capture_output=True
         )
         time.sleep(0.5)

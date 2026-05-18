@@ -63,8 +63,8 @@ gexec 120 "if ! dpkg -l python3-venv 2>/dev/null | grep -q '^ii'; then echo 'Ins
 echo -e "\n[VM $VM_ID] 2c. Creando venv si no existe..."
 gexec 120 "if [ ! -x $BOT_DIR/venv/bin/python3 ]; then echo 'Creando venv...'; rm -rf $BOT_DIR/venv; python3 -m venv $BOT_DIR/venv && echo VENV_CREATED_OK || echo VENV_CREATE_FAILED; else echo 'venv ya existe'; fi"
 
-echo -e "\n[VM $VM_ID] 2d. Instalando dependencias del bot (requests + pyautogui)..."
-gexec 300 "$BOT_DIR/venv/bin/pip install -q --upgrade pip 2>&1 | tail -3; $BOT_DIR/venv/bin/pip install -q requests pyautogui 2>&1 | tail -5; $BOT_DIR/venv/bin/python3 -c 'import pyautogui, requests; print(\"DEPS_OK\")' 2>&1 | tail -3"
+echo -e "\n[VM $VM_ID] 2d. Instalando dependencias del bot (requests + pyautogui + opencv para image recognition)..."
+gexec 300 "$BOT_DIR/venv/bin/pip install -q --upgrade pip 2>&1 | tail -3; $BOT_DIR/venv/bin/pip install -q requests pyautogui pillow opencv-python 2>&1 | tail -5; $BOT_DIR/venv/bin/python3 -c 'import pyautogui, requests, cv2, PIL; print(\"DEPS_OK\")' 2>&1 | tail -3"
 
 echo -e "\n[VM $VM_ID] 2e. Permisos para localuser..."
 gexec 60 "chown -R localuser:localuser $BOT_DIR && echo PERMS_OK"
