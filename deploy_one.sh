@@ -41,17 +41,31 @@ systemctl unmask yiyobot.service 2>/dev/null
 rm -f /etc/systemd/system/yiyolmb.service /etc/systemd/system/yiyobot.service
 systemctl daemon-reload
 
-# Detener bot VIEJO en $OLD_BOT_DIR
+# Detener bot VIEJO: terminal envoltorio (qterminal/xterm/gnome-terminal) que lanza el bot
+pkill -f 'qterminal.*spotify_monitor' 2>/dev/null
+pkill -f 'xterm.*spotify_monitor' 2>/dev/null
+pkill -f 'terminal.*spotify_monitor' 2>/dev/null
+
+# Detener bot VIEJO: procesos python desde la ruta /home/localuser/spotify_robot/
 pkill -f '$OLD_BOT_DIR/' 2>/dev/null
-pkill -f init_launcher_main.py 2>/dev/null
 pkill -f spotify_monitor.py 2>/dev/null
+pkill -f spotify_app_control.py 2>/dev/null
+pkill -f spotify_like.py 2>/dev/null
 pkill -f favorite_playlist.py 2>/dev/null
 pkill -f stats_human.py 2>/dev/null
+pkill -f init_launcher_main.py 2>/dev/null
 
-# Quitar autostart del bot viejo de LXQt si existe
-sudo -u localuser rm -f /home/localuser/.config/autostart/spotify_robot.desktop 2>/dev/null
-sudo -u localuser rm -f /home/localuser/.config/autostart/spotify_humandroid.desktop 2>/dev/null
-sudo -u localuser rm -f /home/localuser/.config/autostart/init_launcher_main.desktop 2>/dev/null
+# Quitar autostart del bot viejo de LXQt: cualquier .desktop que mencione spotify_monitor
+# o la ruta del bot viejo
+sudo -u localuser bash -c '
+    for f in /home/localuser/.config/autostart/*.desktop; do
+        [ -f \"\$f\" ] || continue
+        if grep -qE \"spotify_monitor|spotify_robot/|init_launcher_main|spotify_humandroid\" \"\$f\"; then
+            echo \"Eliminando autostart viejo: \$f\"
+            rm -f \"\$f\"
+        fi
+    done
+' 2>/dev/null || true
 
 # Quitar de cron de localuser si existe
 sudo -u localuser bash -c 'crontab -l 2>/dev/null | grep -v \"spotify_robot\\|spotify_humandroid\\|init_launcher_main\\|spotify_monitor\" | crontab - 2>/dev/null' || true
@@ -63,13 +77,14 @@ sleep 2
 
 # Forzar kill -9 si algo del viejo quedó vivo
 pkill -9 -f '$OLD_BOT_DIR/' 2>/dev/null
-pkill -9 -f init_launcher_main.py 2>/dev/null
 pkill -9 -f spotify_monitor.py 2>/dev/null
+pkill -9 -f 'qterminal.*spotify_monitor' 2>/dev/null
 
 # Reportar lo que quedó
-remaining=\$(pgrep -af '$OLD_BOT_DIR/\\|init_launcher_main\\|spotify_monitor' 2>/dev/null)
+remaining=\$(pgrep -af '$OLD_BOT_DIR/\\|spotify_monitor\\|init_launcher_main' 2>/dev/null)
 if [ -n \"\$remaining\" ]; then
-    echo \"WARN: Aún corriendo: \$remaining\"
+    echo \"WARN: Aún corriendo:\"
+    echo \"\$remaining\"
 else
     echo \"OLD_BOT_KILLED_OK\"
 fi
