@@ -138,10 +138,28 @@ def get_playback_status():
 HEART_IMAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images', 'Click_Like.png')
 
 
+def dismiss_popup():
+    """Cierra cualquier popup/modal de Spotify (ej: oferta Premium) mandando ESC
+    a la ventana. Tambien evita que la pantalla se apague."""
+    try:
+        # Despertar pantalla por si esta en blank/screensaver
+        subprocess.run(['xset', 's', 'reset'], capture_output=True)
+        # ESC a la ventana de Spotify cierra modales/popups sin afectar la reproduccion
+        subprocess.run(
+            'xdotool search --class spotify | head -1 | xargs -r xdotool key --window Escape',
+            shell=True, capture_output=True
+        )
+        time.sleep(0.3)
+    except Exception:
+        pass
+
+
 def dar_like(corazon_x, corazon_y):
     """Da like buscando el icono del corazon vacio por reconocimiento de imagen.
     Restringe la busqueda a la barra del player (parte inferior de la pantalla)
     para evitar matches incorrectos. Cae al fallback de coordenadas si no encuentra."""
+    # Cerrar cualquier popup ANTES de intentar el like (sino el corazon queda tapado)
+    dismiss_popup()
     enfocar_spotify()
     try:
         # Restringir a la barra del player (bottom 120px) para evitar falsos positivos

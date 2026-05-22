@@ -82,6 +82,13 @@ if [ -n \"\$XAUTH\" ] && [ -r \"\$XAUTH\" ]; then
     chmod 600 /home/localuser/.Xauthority
 fi
 xhost +localhost 2>/dev/null || true
+
+# Deshabilitar screensaver y DPMS para que la pantalla nunca se apague
+# (sino pyautogui no puede tomar screenshots / dar like)
+xset s off 2>/dev/null || true
+xset -dpms 2>/dev/null || true
+xset s noblank 2>/dev/null || true
+
 exit 0
 PRESTART_EOF
 chmod +x /usr/local/bin/yiyolmb-prestart.sh && echo PRESTART_OK"
