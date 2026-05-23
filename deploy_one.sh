@@ -54,8 +54,8 @@ gexec 15 "pgrep -af spotify_monitor.py || echo OLD_BOT_DEAD_OK"
 
 # === FASE 2: PREPARAR REPO Y VENV ===
 
-echo -e "\n[VM $VM_ID] 2a. Actualizando repositorio..."
-gexec 60 "export HOME=/home/localuser; git config --global --add safe.directory $BOT_DIR; if [ -d $BOT_DIR/.git ]; then cd $BOT_DIR && git pull origin main 2>&1 | tail -5; else git clone $REPO $BOT_DIR 2>&1 | tail -5; fi; echo STEP2A_OK"
+echo -e "\n[VM $VM_ID] 2a. Actualizando repositorio (fetch + reset --hard para descartar cambios locales)..."
+gexec 60 "if [ -d $BOT_DIR/.git ]; then cd $BOT_DIR && git -c safe.directory=$BOT_DIR fetch origin main 2>&1 | tail -3 && git -c safe.directory=$BOT_DIR reset --hard origin/main 2>&1 | tail -3; else git clone $REPO $BOT_DIR 2>&1 | tail -5; fi; echo STEP2A_OK"
 
 echo -e "\n[VM $VM_ID] 2b. Instalando python3-venv y gnome-screenshot si faltan..."
 gexec 180 "apt-get install -y python3-venv gnome-screenshot 2>&1 | tail -5; echo STEP2B_OK"
