@@ -191,6 +191,11 @@ def dar_like(corazon_x, corazon_y):
     """Da like buscando el icono del corazon vacio por reconocimiento de imagen."""
     dismiss_popup()
     enfocar_spotify()
+
+    if not os.path.exists(HEART_IMAGE):
+        logging.warning(f"Imagen del corazon no existe en {HEART_IMAGE}, saltando like")
+        return
+
     try:
         screen_w, screen_h = pyautogui.size()
         player_bar = (0, max(0, screen_h - 120), screen_w, min(120, screen_h))
@@ -209,10 +214,11 @@ def dar_like(corazon_x, corazon_y):
         return
     except Exception as e:
         logging.warning(f"Error buscando corazon por imagen ({type(e).__name__}): {e}")
+        return
 
-    logging.info(f"Fallback: like via coordenadas ({corazon_x}, {corazon_y})")
-    pyautogui.click(corazon_x, corazon_y)
-    time.sleep(0.5)
+    # Si llegamos aca, no hubo excepcion pero tampoco match. No clickear en
+    # coordenadas fijas (riesgo de pegar en cualquier cosa). Mejor saltarse.
+    logging.info("Like saltado: corazon no encontrado y no se usa fallback de coords")
 
 def enfocar_spotify():
     """Da foco a la ventana de Spotify para que reciba los clicks/teclado."""
@@ -232,8 +238,11 @@ def iniciar_spotify():
         enfocar_spotify()
         return True
 
-    logging.info("Abriendo Spotify...")
-    subprocess.Popen(['spotify'])
+    # Lanzar con --no-sandbox: el snap Spotify a veces queda en pantalla
+    # blanca sin este flag. Usar /snap/bin/spotify si existe (ruta directa)
+    spotify_cmd = '/snap/bin/spotify' if os.path.exists('/snap/bin/spotify') else 'spotify'
+    logging.info(f"Abriendo Spotify con --no-sandbox ({spotify_cmd})...")
+    subprocess.Popen([spotify_cmd, '--no-sandbox'])
     time.sleep(12)
 
     if is_spotify_running():
