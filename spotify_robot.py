@@ -10,23 +10,20 @@ import requests
 from enum import Enum
 from datetime import datetime
 
-# Configuración de pantalla para Proxmox
+# Configuracion de pantalla para Proxmox
 os.environ['XAUTHORITY'] = '/home/localuser/.Xauthority'
 os.environ['DISPLAY'] = ':0'
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'global_config.ini')
 
-
 class PlayerState(Enum):
     IDLE = 1
     PLAYING = 2
-
 
 def load_config():
     config = configparser.ConfigParser()
     config.read(CONFIG_FILE)
     return config
-
 
 def setup_logging(level_str='INFO'):
     level = getattr(logging, level_str.upper(), logging.INFO)
@@ -39,7 +36,6 @@ def setup_logging(level_str='INFO'):
         ]
     )
 
-
 def send_telegram(message, chat_ids, token):
     for chat_id in chat_ids:
         try:
@@ -48,7 +44,6 @@ def send_telegram(message, chat_ids, token):
         except Exception as e:
             logging.warning(f"Telegram error: {e}")
 
-
 def is_spotify_running():
     try:
         result = subprocess.run(['pgrep', '-x', 'spotify'], capture_output=True)
@@ -56,10 +51,8 @@ def is_spotify_running():
     except Exception:
         return False
 
-
 def get_current_song():
-    """Obtiene la canción actual via playerctl o D-Bus (MPRIS)."""
-    # Método 1: playerctl (más simple y preciso)
+    """Obtiene la cancion actual via playerctl o D-Bus (MPRIS)."""
     try:
         result = subprocess.run(
             ['playerctl', '-p', 'spotify', 'metadata', '--format', '{{artist}} - {{title}}'],
@@ -70,7 +63,6 @@ def get_current_song():
     except Exception:
         pass
 
-    # Método 2: D-Bus con parseo correcto via regex
     try:
         result = subprocess.run(
             ['dbus-send', '--print-reply', '--dest=org.mpris.MediaPlayer2.spotify',
@@ -101,7 +93,6 @@ def get_current_song():
     except Exception:
         pass
 
-    # Fallback: título de ventana con xdotool
     try:
         result = subprocess.run(
             'xdotool search --name "Spotify" | head -1 | xargs xdotool getwindowname',
@@ -114,7 +105,6 @@ def get_current_song():
         pass
 
     return None
-
 
 def get_playback_status():
     """Devuelve el estado de Spotify: Playing, Paused o Stopped."""
@@ -134,40 +124,77 @@ def get_playback_status():
         pass
     return None
 
+def is_ad_playing():
+    """Detecta si Spotify esta reproduciendo un anuncio (no una cancion).
+    Spotify marca los anuncios con un mpris:trackid que contiene 'spotify:ad'."""
+    try:
+        result = subprocess.run(
+            ['playerctl', '-p', 'spotify', 'metadata', 'mpris:trackid'],
+            capture_output=True, text=True, timeout=5
+        )
+        trackid = result.stdout.strip().lower()
+        if trackid and ('spotify:ad' in trackid or '/com/spotify/ad/' in trackid):
+            return True
+    except Exception:
+        pass
+
+    try:
+        result = subprocess.run(
+            ['dbus-send', '--print-reply', '--dest=org.mpris.MediaPlayer2.spotify',
+             '/org/mpris/MediaPlayer2',
+             'org.freedesktop.DBus.Properties.Get',
+             'string:org.mpris.MediaPlayer2.Player',
+             'string:Metadata'],
+            capture_output=True, text=True, timeout=5
+        )
+        out = result.stdout.lower()
+        if 'mpris:trackid' in out and ('spotify:ad' in out or '/com/spotify/ad/' in out):
+            return True
+    except Exception:
+        pass
+
+    return False
 
 HEART_IMAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images', 'Click_Like.png')
-
+DISMISS_IMAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images', 'dismiss_button.png')
 
 def dismiss_popup():
-    """Cierra cualquier popup/modal de Spotify (ej: oferta Premium) mandando ESC
-    a la ventana. Tambien evita que la pantalla se apague."""
+    """Cierra cualquier popup/modal de Spotify (ej: oferta Premium).
+    Estrategia: 1) xset para evitar screensaver, 2) ESC a la ventana,
+    3) buscar boton 'Dismiss' por imagen y hacer click."""
     try:
-        # Despertar pantalla por si esta en blank/screensaver
         subprocess.run(['xset', 's', 'reset'], capture_output=True)
-        # ESC a la ventana de Spotify cierra modales/popups sin afectar la reproduccion
         subprocess.run(
             'xdotool search --class spotify | head -1 | xargs -r xdotool key --window Escape',
             shell=True, capture_output=True
         )
         time.sleep(0.3)
+
+        if os.path.exists(DISMISS_IMAGE):
+            try:
+                location = pyautogui.locateOnScreen(
+                    DISMISS_IMAGE, confidence=0.7, grayscale=True
+                )
+                if location is not None:
+                    center = pyautogui.center(location)
+                    logging.info(f"Cerrando popup Premium en ({center.x}, {center.y})")
+                    pyautogui.click(center.x, center.y)
+                    time.sleep(0.5)
+            except pyautogui.ImageNotFoundException:
+                pass
+            except Exception as e:
+                logging.warning(f"Error buscando boton Dismiss: {e}")
     except Exception:
         pass
 
-
 def dar_like(corazon_x, corazon_y):
-    """Da like buscando el icono del corazon vacio por reconocimiento de imagen.
-    Restringe la busqueda a la barra del player (parte inferior de la pantalla)
-    para evitar matches incorrectos. Cae al fallback de coordenadas si no encuentra."""
-    # Cerrar cualquier popup ANTES de intentar el like (sino el corazon queda tapado)
+    """Da like buscando el icono del corazon vacio por reconocimiento de imagen."""
     dismiss_popup()
     enfocar_spotify()
     try:
-        # Restringir a la barra del player (bottom 120px) para evitar falsos positivos
         screen_w, screen_h = pyautogui.size()
         player_bar = (0, max(0, screen_h - 120), screen_w, min(120, screen_h))
 
-        # confidence bajado a 0.6 porque la imagen del bot viejo no matchea
-        # perfecto en la version actual de Spotify (max confidence ~0.64)
         location = pyautogui.locateOnScreen(
             HEART_IMAGE, confidence=0.6, grayscale=True, region=player_bar
         )
@@ -178,20 +205,17 @@ def dar_like(corazon_x, corazon_y):
             time.sleep(0.5)
             return
     except pyautogui.ImageNotFoundException:
-        logging.info("Corazon vacio no encontrado (cancion ya tiene like o necesita imagen mas precisa)")
+        logging.info("Corazon vacio no encontrado (cancion ya tiene like)")
         return
     except Exception as e:
         logging.warning(f"Error buscando corazon por imagen ({type(e).__name__}): {e}")
 
-    # Fallback a coordenadas fijas si la imagen no se puede usar
     logging.info(f"Fallback: like via coordenadas ({corazon_x}, {corazon_y})")
     pyautogui.click(corazon_x, corazon_y)
     time.sleep(0.5)
 
-
 def enfocar_spotify():
-    """Da foco a la ventana de Spotify para que reciba los clicks/teclado.
-    Busca case-insensitive porque el nombre puede ser 'Spotify', 'spotify', 'Spotify Free', etc."""
+    """Da foco a la ventana de Spotify para que reciba los clicks/teclado."""
     try:
         subprocess.run(
             'xdotool search --class spotify | head -1 | xargs -r xdotool windowactivate',
@@ -201,7 +225,6 @@ def enfocar_spotify():
         return True
     except Exception:
         return False
-
 
 def iniciar_spotify():
     if is_spotify_running():
@@ -221,16 +244,14 @@ def iniciar_spotify():
     logging.error("No se pudo iniciar Spotify")
     return False
 
-
 def dbus_play():
-    """Envía comando Play a Spotify via D-Bus (no pausa si ya está reproduciendo)."""
+    """Envia comando Play a Spotify via D-Bus (no pausa si ya esta reproduciendo)."""
     subprocess.run(
         ['dbus-send', '--print-reply', '--dest=org.mpris.MediaPlayer2.spotify',
          '/org/mpris/MediaPlayer2',
          'org.mpris.MediaPlayer2.Player.Play'],
         capture_output=True
     )
-
 
 def abrir_playlist(playlist_id):
     """Abre una playlist en Spotify via D-Bus usando su URI."""
@@ -245,10 +266,9 @@ def abrir_playlist(playlist_id):
             capture_output=True
         )
         time.sleep(4)
-        # Verificar si ya está reproduciendo, si no, enviar Play via D-Bus
         status = get_playback_status()
         if status != 'Playing':
-            logging.info("Spotify no está reproduciendo, enviando Play...")
+            logging.info("Spotify no esta reproduciendo, enviando Play...")
             dbus_play()
             time.sleep(2)
         return True
@@ -256,15 +276,13 @@ def abrir_playlist(playlist_id):
         logging.error(f"Error abriendo playlist {playlist_id}: {e}")
         return False
 
-
 def esperar_horario(scheduled_hours):
     now = datetime.now().strftime('%H:%M')
     horas = [h.strip() for h in scheduled_hours.split(',') if h.strip()]
     if now in horas:
         return True
-    logging.info(f"Hora actual {now} no está en horarios {horas}, esperando...")
+    logging.info(f"Hora actual {now} no esta en horarios {horas}, esperando...")
     return False
-
 
 def main():
     config = load_config()
@@ -272,16 +290,13 @@ def main():
     log_level = config.get('SETTINGS', 'log_level', fallback='INFO').strip()
     setup_logging(log_level)
 
-    # Telegram
     send_msg = config.get('telegram', 'send_msg', fallback='no').strip().lower() == 'yes'
     chat_ids = config.get('telegram', 'chat_ids', fallback='').split(',')
     telegram_token = os.environ.get('TELEGRAM_TOKEN', '')
 
-    # Coordenadas del corazón
     corazon_x = int(config.get('SETTINGS', 'heart_x', fallback='500'))
     corazon_y = int(config.get('SETTINGS', 'heart_y', fallback='710'))
 
-    # Playlists
     raw_ids = config.get('Play_Lists', 'spotify_playlist_ids', fallback='')
     playlists = [p.strip() for p in raw_ids.split(',') if p.strip()]
     shuffle_playlists = config.get('scheduled_time', 'shuffle', fallback='no').strip().lower() == 'yes'
@@ -296,7 +311,6 @@ def main():
     else:
         logging.info(f"Playlists en orden: {playlists}")
 
-    # Horario programado
     use_schedule = config.get('scheduled_time', 'scheduled', fallback='no').strip().lower() == 'yes'
     scheduled_hours = config.get('scheduled_time', 'scheduled_hours', fallback='')
 
@@ -304,13 +318,12 @@ def main():
     last_song = None
     songs_liked = 0
     playlist_index = 0
-    stopped_since = None  # Momento en que Spotify dejó de reproducir
+    stopped_since = None
 
     logging.info("=== Spotify Robot iniciado ===")
 
     while True:
         try:
-            # Verificar horario programado
             if use_schedule and scheduled_hours and not esperar_horario(scheduled_hours):
                 time.sleep(60)
                 continue
@@ -341,23 +354,26 @@ def main():
                 logging.info(f"Esperando {wait}s...")
                 time.sleep(wait)
 
-                # Verificar que Spotify sigue corriendo
                 if not is_spotify_running():
-                    logging.warning("Spotify se cerró inesperadamente, reiniciando...")
+                    logging.warning("Spotify se cerro inesperadamente, reiniciando...")
                     state = PlayerState.IDLE
                     stopped_since = None
                     continue
 
-                # Verificar estado de reproducción
                 status = get_playback_status()
                 logging.info(f"Estado de Spotify: {status}")
 
                 if status == 'Playing':
                     stopped_since = None
-                    # Detectar cambio de canción y dar like
+
+                    if is_ad_playing():
+                        logging.info("Anuncio detectado, cerrando popup y esperando a que termine...")
+                        dismiss_popup()
+                        continue
+
                     current_song = get_current_song()
                     if current_song and current_song != last_song:
-                        logging.info(f"Nueva canción: {current_song}")
+                        logging.info(f"Nueva cancion: {current_song}")
                         dar_like(corazon_x, corazon_y)
                         songs_liked += 1
                         last_song = current_song
@@ -368,14 +384,12 @@ def main():
                                 chat_ids, telegram_token
                             )
                 else:
-                    # Spotify parado o pausado
                     if stopped_since is None:
                         stopped_since = time.time()
-                        logging.warning(f"Spotify no está reproduciendo (estado: {status})")
+                        logging.warning(f"Spotify no esta reproduciendo (estado: {status})")
                     else:
                         elapsed = time.time() - stopped_since
                         logging.warning(f"Spotify detenido hace {int(elapsed)}s")
-                        # Si lleva más de 90 segundos detenido, la playlist terminó
                         if elapsed > 90:
                             playlist_index += 1
                             next_playlist = playlists[playlist_index % len(playlists)]
@@ -396,7 +410,6 @@ def main():
         except Exception as e:
             logging.error(f"Error inesperado: {e}")
             time.sleep(10)
-
 
 if __name__ == '__main__':
     main()
