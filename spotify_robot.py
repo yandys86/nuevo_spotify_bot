@@ -198,10 +198,14 @@ def dar_like(corazon_x, corazon_y):
 
     try:
         screen_w, screen_h = pyautogui.size()
-        player_bar = (0, max(0, screen_h - 120), screen_w, min(120, screen_h))
+        # El player bar de Spotify ocupa aprox los ultimos 220 px de la pantalla
+        # (incluye nombre de cancion + icono + a la derecha). 120 era muy chico
+        # y dejaba el + fuera de la region.
+        region_h = min(220, screen_h)
+        player_bar = (0, max(0, screen_h - region_h), screen_w, region_h)
 
         location = pyautogui.locateOnScreen(
-            HEART_IMAGE, confidence=0.6, grayscale=True, region=player_bar
+            HEART_IMAGE, confidence=0.55, grayscale=True, region=player_bar
         )
         if location is not None:
             center = pyautogui.center(location)
