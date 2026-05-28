@@ -257,6 +257,18 @@ def iniciar_spotify():
     logging.error("No se pudo iniciar Spotify")
     return False
 
+def matar_spotify():
+    """Mata todos los procesos de Spotify (para forzar reinicio cuando esta
+    colgado en un anuncio o popup de update)."""
+    try:
+        subprocess.run(['pkill', '-f', 'spotify'], capture_output=True)
+        time.sleep(2)
+        subprocess.run(['pkill', '-9', '-f', 'spotify'], capture_output=True)
+        time.sleep(3)
+        logging.info("Spotify matado")
+    except Exception as e:
+        logging.warning(f"Error matando Spotify: {e}")
+
 def dbus_play():
     """Envia comando Play a Spotify via D-Bus (no pausa si ya esta reproduciendo)."""
     subprocess.run(
@@ -332,6 +344,11 @@ def main():
     songs_liked = 0
     playlist_index = 0
     stopped_since = None
+    # Si Spotify queda colgado en un anuncio (ej. por popup "Ready to launch"
+    # de un update pendiente), MPRIS reporta ad indefinidamente. Tras N
+    # detecciones consecutivas matamos Spotify para forzar reinicio.
+    consecutive_ads = 0
+    MAX_CONSECUTIVE_ADS = 8
 
     logging.info("=== Spotify Robot iniciado ===")
 
@@ -380,10 +397,18 @@ def main():
                     stopped_since = None
 
                     if is_ad_playing():
-                        logging.info("Anuncio detectado, cerrando popup y esperando a que termine...")
+                        consecutive_ads += 1
+                        logging.info(f"Anuncio detectado ({consecutive_ads}/{MAX_CONSECUTIVE_ADS}), cerrando popup y esperando a que termine...")
                         dismiss_popup()
+                        if consecutive_ads >= MAX_CONSECUTIVE_ADS:
+                            logging.warning(f"Spotify atascado en anuncio tras {consecutive_ads} ciclos, reiniciando Spotify...")
+                            matar_spotify()
+                            consecutive_ads = 0
+                            state = PlayerState.IDLE
+                            last_song = None
                         continue
 
+                    consecutive_ads = 0
                     current_song = get_current_song()
                     if current_song and current_song != last_song:
                         logging.info(f"Nueva cancion: {current_song}")
