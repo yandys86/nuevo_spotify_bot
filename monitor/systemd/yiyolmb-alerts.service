@@ -1,0 +1,8 @@
+[Unit]
+Description=YiyoLMB Spotify Farm — check de salud, alerta on-change
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/nuevo_spotify_bot/monitor
+ExecStart=/usr/bin/python3 /root/nuevo_spotify_bot/monitor/alerts.py

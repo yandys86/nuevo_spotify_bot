@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer del check de salud (cada 5 min)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=yiyolmb-alerts.service
+
+[Install]
+WantedBy=timers.target

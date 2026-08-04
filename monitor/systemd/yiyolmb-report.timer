@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer diario del reporter Spotify farm (10:00 AM local)
+
+[Timer]
+OnCalendar=*-*-* 10:00:00
+Persistent=true
+Unit=yiyolmb-report.service
+
+[Install]
+WantedBy=timers.target

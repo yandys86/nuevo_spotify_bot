@@ -1,0 +1,9 @@
+[Unit]
+Description=YiyoLMB Spotify Farm — reporte diario a Telegram
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/nuevo_spotify_bot/monitor
+ExecStart=/usr/bin/python3 /root/nuevo_spotify_bot/monitor/report.py
+# StandardOutput=journal automáticamente

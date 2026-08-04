@@ -5,3 +5,9 @@ spotify_robot.log
 autostart.log
 bot_stdout.log
 *.log
+activity.log
+.DS_Store
+monitor/.env
+monitor/alerts_state.json
+monitor/reporter_state.json
+*.rar

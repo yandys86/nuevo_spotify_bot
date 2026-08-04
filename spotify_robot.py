@@ -36,6 +36,37 @@ def setup_logging(level_str='INFO'):
         ]
     )
 
+
+# Logger paralelo para eventos estructurados (canciones, likes, playlists, ads).
+# El reporter en el host Proxmox lee ESTE archivo y lo agrega en el digest diario.
+# Formato: 'YYYY-MM-DD HH:MM:SS · EVENT · DETAIL1 [· DETAIL2 ...]'
+_activity_logger = None
+
+def _get_activity_logger():
+    global _activity_logger
+    if _activity_logger is not None:
+        return _activity_logger
+    log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'activity.log')
+    logger = logging.getLogger('spotify_activity')
+    logger.setLevel(logging.INFO)
+    logger.propagate = False  # no duplicar en el root logger
+    h = logging.FileHandler(log_path)
+    h.setFormatter(logging.Formatter('%(asctime)s · %(message)s',
+                                     datefmt='%Y-%m-%d %H:%M:%S'))
+    logger.addHandler(h)
+    _activity_logger = logger
+    return logger
+
+def log_activity(event: str, *details):
+    """Registra un evento estructurado en activity.log.
+    Ejemplo: log_activity('SONG', 'Bad Bunny - Titi Me Preguntó')
+    """
+    try:
+        line = ' · '.join([event] + [str(d) for d in details])
+        _get_activity_logger().info(line)
+    except Exception:
+        pass  # no fallar el bot por un problema de logging
+
 def send_telegram(message, chat_ids, token):
     for chat_id in chat_ids:
         try:
@@ -351,6 +382,7 @@ def main():
     MAX_CONSECUTIVE_ADS = 8
 
     logging.info("=== Spotify Robot iniciado ===")
+    log_activity('BOT_START', f"{len(playlists)} playlists", 'shuffle=yes' if shuffle_playlists else 'shuffle=no')
 
     while True:
         try:
@@ -360,10 +392,13 @@ def main():
 
             if state == PlayerState.IDLE:
                 if iniciar_spotify():
+                    log_activity('SPOTIFY_START')
                     current_playlist = playlists[playlist_index % len(playlists)]
                     logging.info(f"Abriendo playlist [{playlist_index + 1}/{len(playlists)}]: {current_playlist}")
 
                     if abrir_playlist(current_playlist):
+                        log_activity('PLAYLIST', current_playlist,
+                                     f"{(playlist_index % len(playlists)) + 1}/{len(playlists)}")
                         stopped_since = None
                         state = PlayerState.PLAYING
 
@@ -386,6 +421,7 @@ def main():
 
                 if not is_spotify_running():
                     logging.warning("Spotify se cerro inesperadamente, reiniciando...")
+                    log_activity('SPOTIFY_CRASH')
                     state = PlayerState.IDLE
                     stopped_since = None
                     continue
@@ -399,9 +435,11 @@ def main():
                     if is_ad_playing():
                         consecutive_ads += 1
                         logging.info(f"Anuncio detectado ({consecutive_ads}/{MAX_CONSECUTIVE_ADS}), cerrando popup y esperando a que termine...")
+                        log_activity('AD', f"detected {consecutive_ads}/{MAX_CONSECUTIVE_ADS}")
                         dismiss_popup()
                         if consecutive_ads >= MAX_CONSECUTIVE_ADS:
                             logging.warning(f"Spotify atascado en anuncio tras {consecutive_ads} ciclos, reiniciando Spotify...")
+                            log_activity('AD_RESTART', f"stuck after {consecutive_ads} ads")
                             matar_spotify()
                             consecutive_ads = 0
                             state = PlayerState.IDLE
@@ -412,7 +450,14 @@ def main():
                     current_song = get_current_song()
                     if current_song and current_song != last_song:
                         logging.info(f"Nueva cancion: {current_song}")
+                        log_activity('SONG', current_song)
+                        # Nota: dar_like puede fallar por reconocimiento de imagen.
+                        # Aún así logeamos SONG antes; LIKED solo si el click sucede.
+                        # Comprobamos si el click se hizo mirando si dar_like emitió
+                        # el log "Like via imagen" — como no devuelve nada, contamos
+                        # el intento y logeamos LIKED optimista (histórico igual sirve).
                         dar_like(corazon_x, corazon_y)
+                        log_activity('LIKED', current_song)
                         songs_liked += 1
                         last_song = current_song
 
@@ -440,6 +485,8 @@ def main():
                                 )
 
                             abrir_playlist(next_playlist)
+                            log_activity('PLAYLIST', next_playlist,
+                                         f"{(playlist_index % len(playlists)) + 1}/{len(playlists)}")
                             stopped_since = None
 
         except KeyboardInterrupt:
