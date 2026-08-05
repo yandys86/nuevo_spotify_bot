@@ -130,12 +130,14 @@ def fetch_activity(vmid: int, since: datetime) -> list[dict]:
     except Exception:
         since_vm = since  # fallback
     since_str = since_vm.strftime("%Y-%m-%d %H:%M:%S")
-    # `substr(\$0,1,19)` extrae solo el timestamp (evita comparación numérica
-    # implícita de awk que confunde el ordenamiento). El \$ evita que bash
-    # expanda $0 al nombre del shell antes de pasárselo a awk.
+    # `substr($0,1,19)` extrae solo el timestamp (evita comparación numérica
+    # implícita de awk que confunde el ordenamiento). Usamos DOUBLE quotes
+    # bash + \$ escape para que bash convierta \$ → $ literal antes de que
+    # awk reciba el script (dentro de single quotes bash lo hubiera pasado
+    # como '\$' literal y awk lo trataría ambiguamente).
     cmd = (
-        f"awk -v s='{since_str}' "
-        f"'substr(\\$0,1,19) >= s' {ACTIVITY_LOG} 2>/dev/null || true"
+        f'awk -v s="{since_str}" '
+        f'"substr(\\$0,1,19) >= s" {ACTIVITY_LOG} 2>/dev/null || true'
     )
     rc, out = qm_exec(vmid, cmd, timeout=25)
     events = []
