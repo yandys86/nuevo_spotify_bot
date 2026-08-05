@@ -116,12 +116,25 @@ def check_vm_health(vmid: int) -> dict:
 
 
 def fetch_activity(vmid: int, since: datetime) -> list[dict]:
-    """Devuelve las líneas parseadas de activity.log desde `since`."""
-    # `awk` filtra en la VM para no transferir logs enormes.
-    since_str = since.strftime("%Y-%m-%d %H:%M:%S")
+    """Devuelve las líneas parseadas de activity.log desde `since`.
+    Ajusta el timestamp al TZ de la VM (que puede ser distinto del host —
+    típico: host en HDT, VMs en CDT → 4h de offset).
+    """
+    # Wall clock de la VM para calcular offset y filtrar en su misma escala
+    rc, out = qm_exec(vmid, "date '+%Y-%m-%d %H:%M:%S'", timeout=6)
+    try:
+        vm_now = datetime.strptime((out or "").strip().split("\n")[0],
+                                   "%Y-%m-%d %H:%M:%S")
+        offset = vm_now - datetime.now()
+        since_vm = since + offset
+    except Exception:
+        since_vm = since  # fallback
+    since_str = since_vm.strftime("%Y-%m-%d %H:%M:%S")
+    # `substr($0,1,19)` extrae solo el timestamp (evita comparación numérica
+    # implícita de awk que confunde el ordenamiento).
     cmd = (
         f"awk -v s='{since_str}' "
-        f"'$0 >= s' {ACTIVITY_LOG} 2>/dev/null || true"
+        f"'substr($0,1,19) >= s' {ACTIVITY_LOG} 2>/dev/null || true"
     )
     rc, out = qm_exec(vmid, cmd, timeout=25)
     events = []
