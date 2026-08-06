@@ -62,6 +62,19 @@ def load_env():
             os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
+def _fix_double_utf8(s: str) -> str:
+    """qm-guest-agent devuelve el output DOUBLE-encoded en UTF-8 (los bytes
+    UTF-8 originales quedan interpretados como latin-1 y re-codificados otra
+    vez). Deshacemos el segundo encode para tener el string original.
+    """
+    if not s:
+        return s
+    try:
+        return s.encode("latin-1").decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return s
+
+
 def qm_exec(vmid: int, cmd: str, timeout: int = 20) -> tuple[int, str]:
     """Ejecuta un comando dentro de la VM vía qemu-guest-agent."""
     try:
@@ -75,7 +88,8 @@ def qm_exec(vmid: int, cmd: str, timeout: int = 20) -> tuple[int, str]:
         # qm devuelve JSON en stdout
         try:
             data = json.loads(r.stdout)
-            return int(data.get("exitcode", 1)), data.get("out-data", "") or data.get("err-data", "")
+            payload = data.get("out-data", "") or data.get("err-data", "")
+            return int(data.get("exitcode", 1)), _fix_double_utf8(payload)
         except json.JSONDecodeError:
             return 1, r.stdout
     except subprocess.TimeoutExpired:
